@@ -92,7 +92,21 @@ function mangleWiki( path, html ) {
 }
 
 module.exports = {
-    setup: function( k ) {
+    setup: async function( k ) {
+
+        function loadFile( filename ) {
+            return new Promise( (fulfill, reject) => {
+                k.readHierarchyFile( k.website, filename, ( err, data ) => {
+                    if( err )
+                        return reject( err );
+                    fulfill( data[0] );
+                });
+            });
+        }
+        const sslReqOpts = {
+            key: await loadFile( "private/client.key" ),
+            cert: await loadFile( "private/client.cert" ),
+        };
 
         /* default jade value helper */
         var vals = k.setupOpts.vals;
@@ -101,7 +115,7 @@ module.exports = {
         k.router.get("/res/*", function( req, res, next ) {
             var resUrl = wikiPrefix + url.parse( req.url ).path.substr(4);
             if( resUrl.indexOf( "css.php?t=dokuwiki" ) > 0 ) {
-                https.get( resUrl, function( httpRes ) {
+                https.get( resUrl, sslReqOpts, function( httpRes ) {
                     /* consume and mangle */
                     var cssContent = "";
 
@@ -135,7 +149,7 @@ module.exports = {
                 });
             }
             else if( resUrl.indexOf( "/lib/exe/js.php?t=dokuwiki&tseed=" ) >= 0 ) {
-                https.get( resUrl, function( httpRes ) {
+                https.get( resUrl, sslReqOpts, function( httpRes ) {
                     /* consume and mangle */
                     var jsContent = "";
 
@@ -155,7 +169,7 @@ module.exports = {
             }
             else if( resUrl.indexOf( "mediamanager.php" ) >= 0 ) {
                 console.log( "MEDIAMNGR" );
-                https.get( resUrl, function( httpRes ) {
+                https.get( resUrl, sslReqOpts, function( httpRes ) {
                     /* consume and mangle */
                     var htmlContent = "";
 
@@ -188,7 +202,7 @@ module.exports = {
                     headers: req.headers,
                     host: wikiHost,
                     method: req.method
-                });
+                }, sslReqOpts);
                 reqOpts.headers.host = wikiHost;
 
                 var httpReq = https.request( reqOpts, (httpRes) => {
@@ -213,7 +227,7 @@ module.exports = {
 
             function performRequest( opts ) {
                 opts = opts || {};
-                var reqOpts = {
+                var reqOpts = Object.assign( {
                     hostname: wikiHost,
                     path: "/doku.php" + (opts.path || wikiPath),
                     port: 443,
@@ -231,7 +245,7 @@ module.exports = {
                         "user-agent"
                     ), opts.omittedHeaders ),
                     opts.extendHeaders )
-                };
+                }, sslReqOpts );
 
                 var httpReq = https.request( reqOpts, ( httpRes ) => {
                     var httpContent = "";
